@@ -23,25 +23,36 @@ public static class Endpoint
 
         foreach (var worksheet in workbook.Worksheets)
         {
-            if (!worksheet.RowsUsed().Any())
+            var lastColumnUsed = worksheet.LastColumnUsed();
+
+            if (lastColumnUsed == null)
                 continue;
+
+            var firstRow = worksheet.FirstRowUsed()?.RowNumber() ?? 1;
+            var firstCol = worksheet.FirstColumnUsed()?.ColumnNumber() ?? 1;
+            var lastCol = lastColumnUsed.ColumnNumber();
+
+            lastCol = worksheet.MergedRanges
+                .Select(mergedRange => mergedRange.LastColumn().ColumnNumber())
+                .Prepend(lastCol).Max();
 
             var content = new Dictionary<string, Dictionary<string, object>>();
-            var usedRange = worksheet.RangeUsed();
-
-            if (usedRange == null)
-                continue;
-
-            var firstRow = usedRange.FirstRow().RowNumber();
-            var lastRow = usedRange.LastRow().RowNumber();
-            var firstCol = usedRange.FirstColumn().ColumnNumber();
-            var lastCol = usedRange.LastColumn().ColumnNumber();
-
-            for (var row = firstRow; row <= lastRow; row++)
+            for (var col = firstCol; col <= lastCol; col++)
             {
-                var rowData = new Dictionary<string, object>();
+                content[col.ToString()] = new Dictionary<string, object>();
+                var lastRowInColumn = firstRow;
 
-                for (var col = firstCol; col <= lastCol; col++)
+                var lastCellUsed = worksheet.Column(col).LastCellUsed();
+                if (lastCellUsed != null)
+                    lastRowInColumn = lastCellUsed.Address.RowNumber;
+
+                lastRowInColumn = (from mergedRange in worksheet.MergedRanges
+                    let firstMergedCol = mergedRange.FirstColumn().ColumnNumber()
+                    let lastMergedCol = mergedRange.LastColumn().ColumnNumber()
+                    where col >= firstMergedCol && col <= lastMergedCol
+                    select mergedRange.LastRow().RowNumber()).Prepend(lastRowInColumn).Max();
+
+                for (var row = firstRow; row <= lastRowInColumn; row++)
                 {
                     var cell = worksheet.Cell(row, col);
                     object cellValue;
@@ -56,12 +67,8 @@ public static class Endpoint
                         cellValue = GetCellValue(cell);
                     }
 
-                    if (cell.IsMerged() || !cell.IsEmpty())
-                        rowData[col.ToString()] = cellValue;
+                    content[col.ToString()][row.ToString()] = cellValue;
                 }
-
-                if (rowData.Count != 0)
-                    content[row.ToString()] = rowData;
             }
 
             sheetsData.Add(new
@@ -70,7 +77,6 @@ public static class Endpoint
                 content
             });
         }
-
 
         return Results.Ok(new { sheets = sheetsData });
     }
@@ -87,7 +93,7 @@ public static class Endpoint
     private static object GetCellValue(IXLCell cell)
     {
         if (cell.IsEmpty())
-            return null;
+            return "null";
 
         if (cell.Value.IsText)
             return cell.Value.GetText();

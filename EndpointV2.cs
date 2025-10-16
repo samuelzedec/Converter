@@ -20,10 +20,10 @@ public static class EndpointV2
 
         ExcelPackage.License.SetNonCommercialPersonal("Lucas de Lima Canto");
         await using var stream = file.OpenReadStream();
-        
+
         try
         {
-            using var package = string.IsNullOrEmpty(password) 
+            using var package = string.IsNullOrEmpty(password)
                 ? new ExcelPackage(stream)
                 : new ExcelPackage(stream, password);
 
@@ -32,20 +32,38 @@ public static class EndpointV2
             foreach (var worksheet in package.Workbook.Worksheets)
             {
                 var dimension = worksheet.Dimension;
-                
+
                 if (dimension == null)
                     continue;
 
-                var content = new Dictionary<string, Dictionary<string, object>>();
                 var firstRow = dimension.Start.Row;
-                var lastRow = dimension.End.Row;
                 var firstCol = dimension.Start.Column;
                 var lastCol = dimension.End.Column;
+                var content = new Dictionary<string, Dictionary<string, object>>();
 
-                for (var row = firstRow; row <= lastRow; row++)
+                for (var col = firstCol; col <= lastCol; col++)
                 {
-                    var rowData = new Dictionary<string, object>();
-                    for (var col = firstCol; col <= lastCol; col++)
+                    content[col.ToString()] = new Dictionary<string, object>();
+                    var lastRowInColumn = firstRow;
+
+                    for (var row = dimension.End.Row; row >= firstRow; row--)
+                    {
+                        var cell = worksheet.Cells[row, col];
+
+                        if (!cell.Merge && cell.Value == null) continue;
+                        lastRowInColumn = row;
+                        break;
+                    }
+
+                    lastRowInColumn = (from mergeAddress in worksheet.MergedCells
+                        select worksheet.Cells[mergeAddress]
+                        into mergeRange
+                        let firstMergedCol = mergeRange.Start.Column
+                        let lastMergedCol = mergeRange.End.Column
+                        where col >= firstMergedCol && col <= lastMergedCol
+                        select mergeRange.End.Row).Prepend(lastRowInColumn).Max();
+
+                    for (var row = firstRow; row <= lastRowInColumn; row++)
                     {
                         var cell = worksheet.Cells[row, col];
                         object? cellValue = null;
@@ -64,13 +82,8 @@ public static class EndpointV2
                         else
                             cellValue = GetCellValue(cell);
 
-
-                        if (cell.Merge || cellValue != null)
-                            rowData[col.ToString()] = cellValue ?? string.Empty;
+                        content[col.ToString()][row.ToString()] = cellValue ?? "null";
                     }
-
-                    if (rowData.Count != 0)
-                        content[row.ToString()] = rowData;
                 }
 
                 sheetsData.Add(new
@@ -95,7 +108,7 @@ public static class EndpointV2
     private static object? GetCellValue(ExcelRange cell)
     {
         var value = cell.Value;
-        
+
         if (value == null)
             return null;
 
