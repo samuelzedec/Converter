@@ -9,6 +9,5 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.MapEndpoint();
-app.UseHttpsRedirection();
 
 await app.RunAsync();

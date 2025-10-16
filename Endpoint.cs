@@ -6,8 +6,8 @@ public static class Endpoint
 {
     public static void MapEndpoint(this WebApplication app)
         => app.MapPost("export-json", HandlerAsync)
-            .WithName("export-json")
-            .WithDisplayName("transformar excel em json na teoria");
+            .Accepts<IFormFile>("multipart/form-data")
+            .DisableAntiforgery();
 
     private static async Task<IResult> HandlerAsync(
         IFormFile file,
@@ -23,23 +23,45 @@ public static class Endpoint
 
         foreach (var worksheet in workbook.Worksheets)
         {
-            var content = new Dictionary<string, Dictionary<string, object>>();
             if (!worksheet.RowsUsed().Any())
                 continue;
 
-            var columnsCount = worksheet.ColumnsUsed().Count();
-            var rowsCount = worksheet.LastRow().RowNumber();
+            var content = new Dictionary<string, Dictionary<string, object>>();
+            var usedRange = worksheet.RangeUsed();
 
-            for (var row = 1; row <= rowsCount; row++)
+            if (usedRange == null)
+                continue;
+
+            var firstRow = usedRange.FirstRow().RowNumber();
+            var lastRow = usedRange.LastRow().RowNumber();
+            var firstCol = usedRange.FirstColumn().ColumnNumber();
+            var lastCol = usedRange.LastColumn().ColumnNumber();
+
+            for (var row = firstRow; row <= lastRow; row++)
             {
                 var rowData = new Dictionary<string, object>();
-                for (var col = 1; col <= columnsCount; col++)
+
+                for (var col = firstCol; col <= lastCol; col++)
                 {
                     var cell = worksheet.Cell(row, col);
-                    rowData[col.ToString()] = cell.Value;
+                    object cellValue;
+
+                    if (cell.IsMerged())
+                    {
+                        var mergedRange = cell.MergedRange();
+                        cellValue = GetCellValue(mergedRange.FirstCell());
+                    }
+                    else
+                    {
+                        cellValue = GetCellValue(cell);
+                    }
+
+                    if (cell.IsMerged() || !cell.IsEmpty())
+                        rowData[col.ToString()] = cellValue;
                 }
 
-                content[row.ToString()] = rowData;
+                if (rowData.Count != 0)
+                    content[row.ToString()] = rowData;
             }
 
             sheetsData.Add(new
@@ -48,6 +70,7 @@ public static class Endpoint
                 content
             });
         }
+
 
         return Results.Ok(new { sheets = sheetsData });
     }
@@ -59,5 +82,31 @@ public static class Endpoint
 
         if (!rows.Any())
             throw new BadHttpRequestException("Nenhum arquivo enviado");
+    }
+    
+    private static object GetCellValue(IXLCell cell)
+    {
+        if (cell.IsEmpty())
+            return null;
+
+        if (cell.Value.IsText)
+            return cell.Value.GetText();
+    
+        if (cell.Value.IsNumber)
+            return cell.Value.GetNumber();
+    
+        if (cell.Value.IsBoolean)
+            return cell.Value.GetBoolean();
+    
+        if (cell.Value.IsDateTime)
+            return cell.Value.GetDateTime();
+    
+        if (cell.Value.IsTimeSpan)
+            return cell.Value.GetTimeSpan();
+    
+        if (cell.Value.IsError)
+            return cell.Value.GetError();
+
+        return cell.GetString();
     }
 }
