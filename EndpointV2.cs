@@ -26,7 +26,7 @@ public static class EndpointV2
             using var package = string.IsNullOrEmpty(password)
                 ? new ExcelPackage(stream)
                 : new ExcelPackage(stream, password);
-
+            // using var package = new ExcelPackage(stream, "adasda");
             var sheetsData = new List<object>();
 
             foreach (var worksheet in package.Workbook.Worksheets)
@@ -82,7 +82,7 @@ public static class EndpointV2
                         else
                             cellValue = GetCellValue(cell);
 
-                        content[col.ToString()][row.ToString()] = cellValue ?? "null";
+                        content[col.ToString()][row.ToString()] = cellValue;
                     }
                 }
 
@@ -105,12 +105,12 @@ public static class EndpointV2
         }
     }
 
-    private static object? GetCellValue(ExcelRange cell)
+    private static object GetCellValue(ExcelRange cell)
     {
         var value = cell.Value;
 
         if (value == null)
-            return null;
+            return "null";
 
         return value switch
         {
