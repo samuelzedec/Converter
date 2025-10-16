@@ -83,7 +83,7 @@ public static class Endpoint
         if (!rows.Any())
             throw new BadHttpRequestException("Nenhum arquivo enviado");
     }
-    
+
     private static object GetCellValue(IXLCell cell)
     {
         if (cell.IsEmpty())
@@ -91,19 +91,19 @@ public static class Endpoint
 
         if (cell.Value.IsText)
             return cell.Value.GetText();
-    
+
         if (cell.Value.IsNumber)
             return cell.Value.GetNumber();
-    
+
         if (cell.Value.IsBoolean)
             return cell.Value.GetBoolean();
-    
+
         if (cell.Value.IsDateTime)
             return cell.Value.GetDateTime();
-    
+
         if (cell.Value.IsTimeSpan)
             return cell.Value.GetTimeSpan();
-    
+
         if (cell.Value.IsError)
             return cell.Value.GetError();
 
