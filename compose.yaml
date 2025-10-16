@@ -1,0 +1,6 @@
+﻿services:
+  converter:
+    image: converter
+    build:
+      context: .
+      dockerfile: Dockerfile
